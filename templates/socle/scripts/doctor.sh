@@ -117,6 +117,19 @@ else
   bad "scripts/guards.sh manquant — le socle ne sait plus dire ce qu'il protège"
 fi
 
+# ⚠️ AUCUN OUTIL EXTERNE POUR SONDER UN PORT.
+#
+# Ce bloc appelait `lsof` une fois par port. Le 2026-08-16, sur une machine
+# par ailleurs saine, un SEUL appel a dépassé trois minutes — `lsof` interroge
+# tout l'espace des descripteurs, et un point de montage réseau lent suffit à
+# le figer. `doctor` ne rendait plus son verdict.
+#
+# Un diagnostic qui peut se bloquer est un diagnostic qu'on cesse de lancer,
+# donc un garde-fou qui n'existe plus. La sonde ci-dessous est native à bash :
+# une tentative de connexion sur la boucle locale, refusée instantanément si
+# rien n'écoute. Aucun processus, rien à installer, rien qui puisse pendre.
+port_ouvert() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && exec 3>&-; }
+
 # ⚠️ LES PORTS SE LISENT, ILS NE S'ÉCRIVENT PAS ICI.
 #
 # Ce bloc a d'abord contenu la liste en dur. Ça marchait — dans ce dépôt-là.
@@ -143,7 +156,7 @@ else
     if [ -n "$TRANCHE" ] && { [ "$p" -lt "${TRANCHE%%-*}" ] || [ "$p" -gt "${TRANCHE##*-}" ]; }; then
       bad "$p est hors de la tranche $TRANCHE"
     fi
-    if lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+    if port_ouvert "$p"; then
       note "$p occupé"; occupes=$((occupes + 1))
     fi
   done <<<"$PORTS"

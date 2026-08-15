@@ -82,18 +82,27 @@ case "$CMD" in
     fi
 
     if command -v aegis >/dev/null; then
-      # ⚠️ `aegis status` LISTE TOUS LES PROJETS ENREGISTRÉS ET SORT EN 0.
+      # ⚠️ DEUX PIÈGES ICI, ET LE SECOND N'EST APPARU QU'À L'USAGE.
       #
-      # Vérifié — et c'est exactement le piège que ce script est censé éviter.
-      # Un `if aegis status >/dev/null` répond « protégé » dès qu'aegis connaît
-      # UN projet, fût-ce une démo dans /tmp datant de six semaines. Le premier
-      # jet de ce script faisait ça, et affichait fièrement « projet
-      # enregistré, shadow actif » sur un dossier qui n'avait jamais vu
-      # `aegis init`.
+      # 1. `aegis status` LISTE TOUS LES PROJETS ENREGISTRÉS ET SORT EN 0.
+      #    Un `if aegis status >/dev/null` répond « protégé » dès qu'aegis
+      #    connaît UN projet, fût-ce une démo dans /tmp datant de six semaines.
+      #    Le premier jet faisait ça, et affichait « shadow actif » sur un
+      #    dossier qui n'avait jamais vu `aegis init`.
       #
-      # On demande donc si CE chemin-ci est dans la liste.
+      # 2. `aegis status --json` prend ~45 s dès qu'un projet réel est
+      #    enregistré (mesuré le 2026-08-16, un seul projet, shadow de 456 Ko).
+      #    Appelé depuis `doctor`, il rendait le diagnostic inutilisable — et
+      #    un `doctor` qui met une minute est un `doctor` que personne ne
+      #    lance, donc un garde-fou qui n'existe pas.
+      #
+      # On lit donc le registre, qui est un simple fichier : aegis y écrit
+      # ~/.config/aegis/projects/<nom>.json avec le chemin du projet. Coût
+      # nul, et la question posée reste la bonne — « CE dossier-ci, pas un
+      # autre ».
       ici="$(pwd -P)"
-      if aegis status --json 2>/dev/null | grep -qF "\"path\": \"$ici\""; then
+      reg="${XDG_CONFIG_HOME:-$HOME/.config}/aegis/projects/$(basename "$ici").json"
+      if [ -f "$reg" ] && grep -qF "\"$ici\"" "$reg"; then
         [ "$QUIET" -eq 1 ] || ok "aegis — ce projet est enregistré, shadow actif"
       else
         [ "$QUIET" -eq 1 ] || warn "aegis présent, mais CE projet n'est pas enregistré"
@@ -126,13 +135,14 @@ case "$CMD" in
             · ~/.config/aegis/shadow/<projet>  — le filet lui-même. Hors de
               l'arbre à dessein : un filet rangé dans ce qu'il protège
               disparaît avec lui. Empreinte nulle dans le working tree.
-            · ~/.claude/settings.json          — un hook PreToolUse GLOBAL,
-              qui s'applique donc à tous vos projets, pas seulement celui-ci.
-          Ce second point ne figurait pas ici jusqu'au 2026-08-16 : le script
-          annonçait moins qu'il ne faisait. Un avertissement incomplet vaut
-          à peine mieux que pas d'avertissement — c'est sur sa foi qu'on
-          répond « oui ».
-          Sans le hook global : aegis init --no-hook (le shadow reste, la
+            · ./.claude/settings.json          — le hook PreToolUse, posé en
+              portée PROJET grâce à `aegis init --local`.
+          ⚠️ Le défaut d'aegis est GLOBAL (~/.claude/settings.json, son ADR
+          0005) : il s'appliquerait alors à tous vos dépôts. Ce socle décrit
+          ce que CE dépôt exige — il utilise donc `--local`, symétrique de
+          `shhh --scope project`. Un dépôt cloné hérite de sa protection sans
+          rien imposer à la machine qui l'accueille.
+          Sans hook du tout : aegis init --no-hook (le shadow reste, la
           capture avant chaque action d'agent, non).
 
 AVERT
@@ -147,7 +157,10 @@ AVERT
     else bad "shhh introuvable — direnv allow"; fi
 
     if command -v aegis >/dev/null; then
-      aegis init && ok "aegis : projet enregistré"
+      # `--local` : le hook va dans ./.claude/settings.json, comme celui de shhh.
+      # Le défaut d'aegis est GLOBAL (son ADR 0005) — ce socle décrit ce que CE
+      # dépôt exige, pas ce que la machine impose à tous les autres.
+      aegis init --local && ok "aegis : projet enregistré (hook local)"
     else bad "aegis introuvable — direnv allow"; fi
 
     # ⚠️ LE CHIFFRE D'ABORD, L'INSTALLATION ENSUITE.
