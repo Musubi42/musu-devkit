@@ -1,0 +1,48 @@
+# Stack locale de MON-PROJET — postgres, redis, mailpit.
+#
+# ⚠️ C'EST LE SEUL ENDROIT DU PROJET QUI DEMANDE UN VRAI CHANGEMENT (03 §5.2).
+#
+# Deux mécanismes qu'on confond tout le temps :
+#
+#   env_file: .env        → passe un FICHIER au conteneur. Interdit pour un
+#                           secret : il faut alors qu'un .env en clair existe
+#                           sur le disque, ce que toute cette architecture
+#                           existe pour éviter.
+#
+#   environment:          → forme LISTE, sans valeur : la variable est héritée
+#     - PGPASSWORD          du shell qui lance `docker compose`. C'est ce
+#                           shell-là que scripts/with-secrets.sh remplit, en
+#                           mémoire, pour la durée de la commande.
+#
+# Le `.env` que Compose lit pour l'interpolation (`${PG_PORT}`) reste, mais il
+# ne contient que du non-secret : c'est .env.public, chargé par direnv.
+#
+#   task up   →  with-secrets.sh dev docker compose -f deploy/compose.dev.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # 127.0.0.1 et pas 0.0.0.0 : la base ne doit pas être joignable depuis le
+    # réseau local. Un port de dev exposé est une base de dev moissonnée.
+    ports:
+      - "127.0.0.1:${PG_PORT:-7932}:5432"
+    environment:
+      - POSTGRES_PASSWORD=${PGPASSWORD:?PGPASSWORD absent — lancer via task up, pas docker compose directement}
+      - POSTGRES_USER=${PGUSER:-mon_projet}
+      - POSTGRES_DB=${PGDATABASE:-mon_projet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-mon_projet}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-7979}:6379"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:${MAILPIT_HTTP_PORT:-7925}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-7926}:1025"

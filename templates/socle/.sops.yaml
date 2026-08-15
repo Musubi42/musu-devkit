@@ -1,0 +1,36 @@
+# SOPS — règles de chiffrement de musuPlate.
+#
+# Les clés publiques age ne sont PAS des secrets : les publier ici est le
+# fonctionnement normal de sops. Les clés PRIVÉES vivent dans
+# ~/.config/sops/age/keys.txt sur chaque machine et n'apparaissent nulle part.
+#
+# ⚠️ CE DÉPÔT EST UN LABO. Les recipients ci-dessous reproduisent la convention
+# du parc (une clé par machine de dev) pour que ce qu'on éprouve ici soit
+# transposable — mais rien ici ne doit contenir un secret dont la perte coûte.
+# La seule vraie clé présente est une clé Resend de test, autorisée par
+# l'opérateur, destinée à `secrets:verify`.
+#
+# Bootstrap d'une nouvelle machine :
+#   1. age-keygen -o ~/.config/sops/age/keys.txt
+#   2. coller la pubkey ci-dessous (ligne `# public key: age1...`)
+#   3. depuis une machine déjà autorisée : sops updatekeys secrets/dev.env
+#   4. commiter .sops.yaml + secrets/dev.env
+#
+# Rotation (machine compromise) : retirer la pubkey, `sops updatekeys`, PUIS
+# rotater les secrets eux-mêmes — retirer un recipient n'invalide pas ce qu'il
+# a déjà pu lire.
+
+creation_rules:
+  - path_regex: secrets/.*\.env$
+    key_groups:
+      - age:
+          # ⚠️ REMPLACER — ces lignes sont un placeholder, pas une clé.
+          #
+          # `task doctor` échoue tant qu'elles sont là : un .sops.yaml sans
+          # recipient réel produit un fichier que PERSONNE ne peut déchiffrer,
+          # et on ne s'en aperçoit qu'au moment d'en avoir besoin.
+          #
+          #   age-keygen -o ~/.config/sops/age/keys.txt   # si pas déjà fait
+          #   grep '^# public key:' ~/.config/sops/age/keys.txt
+          #
+          - age1REMPLACER000000000000000000000000000000000000000000000000

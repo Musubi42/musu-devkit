@@ -1,0 +1,148 @@
+version: '3'
+
+# ⚠️ PAS DE CLÉ `dotenv:` ICI.
+#
+# `dotenv:` fait lire un fichier par Task et pose son contenu dans
+# l'environnement de TOUTES les tâches, y compris celles qui n'en ont pas
+# besoin (03 §6). Les secrets passent par scripts/with-secrets.sh, tâche par
+# tâche. La config non secrète, elle, vient de .env.public via direnv.
+
+vars:
+  ENV: '{{.ENV | default "dev"}}'
+  # `--env-file .env.public` : l'INTERPOLATION du YAML (les `${PG_PORT}`), et
+  # rien d'autre. À ne pas confondre avec `env_file:` DANS le compose, qui
+  # passerait un fichier au conteneur — interdit pour un secret (03 §5.2).
+  # Explicite plutôt qu'hérité de direnv : `task up` doit marcher pour qui
+  # n'utilise pas direnv, sinon la valeur de défaut silencieuse du YAML
+  # s'applique et on croit tourner sur le bon port.
+  COMPOSE: docker compose --env-file .env.public -f deploy/compose.dev.yml
+  # ⚠️ Compose interpole le fichier ENTIER quelle que soit la sous-commande :
+  # même `ps` exige que PGPASSWORD ait une valeur, sinon le `:?` du YAML
+  # l'arrête. Plutôt que de déchiffrer les secrets pour lire l'état des
+  # conteneurs — ce qui banaliserait le déchiffrement — on passe une valeur
+  # bidon là où la vraie n'a aucun effet. Elle ne sert qu'à satisfaire
+  # l'interpolation ; aucun conteneur n'est créé ni recréé par ces commandes.
+  NOSECRET: PGPASSWORD=interpolation-only
+
+tasks:
+  default:
+    cmds: [task --list]
+    silent: true
+
+  # --- Garde-fous -----------------------------------------------------------
+
+  guards:status:
+    desc: Que protège-t-on, ici, maintenant ? Distingue « binaire présent » de « hook câblé ».
+    cmds:
+      - ./scripts/guards.sh status
+
+  guards:install:
+    desc: Câble shhh (fuite vers le modèle) et aegis (destruction par l'agent) sur ce projet.
+    interactive: true
+    cmds:
+      - ./scripts/guards.sh install
+
+  guards:scan:
+    desc: Secrets présents dans l'arbre de travail — délégué à shhh (~222 règles).
+    cmds:
+      - ./scripts/guards.sh scan
+
+  guards:audit:
+    desc: Ce qui a DÉJÀ atteint le modèle, d'après les transcriptions sur ce disque.
+    cmds:
+      - ./scripts/guards.sh audit
+
+  # --- Secrets --------------------------------------------------------------
+
+  secrets:verify:
+    desc: Sonde chaque secret contre son fournisseur. PREMIÈRE commande d'un réveil de projet.
+    cmds:
+      - ./scripts/verify-secrets.sh
+
+  secrets:edit:
+    desc: Édite secrets/dev.env en clair dans l'éditeur, chiffré au retour. Rien ne touche le disque en clair.
+    cmds:
+      - sops secrets/{{.ENV}}.env
+
+  secrets:names:
+    desc: Liste les NOMS des secrets présents (jamais les valeurs).
+    cmds:
+      - sops --decrypt secrets/{{.ENV}}.env | grep -oE '^[A-Za-z_][A-Za-z0-9_]*' | sort
+
+  secrets:clean:
+    desc: Détruit tout .env matérialisé. À lancer après toute édition hors sops.
+    cmds:
+      - cmd: rm -f .env .env.local secrets/*.dec
+        ignore_error: true
+
+  shell:secrets:
+    desc: Sous-shell AVEC les secrets. On l'ouvre exprès, on le ferme. Pas un mode de travail.
+    # Un sous-shell et non `direnv reload` : quand il se ferme, les valeurs
+    # partent avec lui. Un shell direnv, lui, garde une copie dans DIRENV_DIFF
+    # jusqu'à la sortie du dossier.
+    interactive: true
+    cmds:
+      - ./scripts/with-secrets.sh {{.ENV}} bash --norc -i
+
+  # --- Applications ---------------------------------------------------------
+
+  dev:api:
+    desc: API Node en watch — éprouve l'injection dans un process long.
+    cmds:
+      - ./scripts/with-secrets.sh {{.ENV}} node --watch apps/api/server.mjs
+
+  dev:front:
+    desc: Front Vite — éprouve la sémantique du préfixe VITE_.
+    # ⚠️ PAS de with-secrets ici, et c'est le point de l'exercice.
+    # Vite inline dans le bundle servi au navigateur TOUTE variable préfixée
+    # VITE_. Injecter des secrets dans ce process, c'est les publier. Le front
+    # reçoit .env.public et rien d'autre.
+    cmds:
+      - pnpm --dir apps/front dev
+
+  front:guard:
+    desc: Échoue si un secret a été inliné dans le bundle front. Le garde-fou du cas VITE_.
+    cmds:
+      - ./scripts/front-guard.sh
+
+  front:guard:test:
+    desc: Vérifie que le garde-fou détecte vraiment — avec une valeur jetable, jamais un vrai secret.
+    cmds:
+      - ./scripts/front-guard.sh --self-test
+
+  up:
+    desc: Stack locale (postgres, redis, mailpit) avec héritage d'env — 03 §5.2.
+    # `docker compose` lit `environment:` en forme de liste SANS valeur : les
+    # variables sont héritées du shell de CETTE commande, donc de
+    # with-secrets.sh. Aucun env_file de secrets, aucune valeur dans le YAML.
+    cmds:
+      - ./scripts/with-secrets.sh {{.ENV}} {{.COMPOSE}} up -d
+      - task: ps
+
+  ps:
+    desc: État des conteneurs.
+    cmds:
+      - '{{.NOSECRET}} {{.COMPOSE}} ps'
+
+  down:
+    desc: Arrête la stack locale.
+    cmds:
+      - '{{.NOSECRET}} {{.COMPOSE}} down'
+
+  logs:
+    cmds:
+      - '{{.NOSECRET}} {{.COMPOSE}} logs -f'
+
+  # --- Cas one-shot ---------------------------------------------------------
+
+  send:test:
+    desc: Envoi d'un email de test via Resend — le cas script bash one-shot.
+    cmds:
+      - ./scripts/with-secrets.sh {{.ENV}} ./scripts/send-test-email.sh {{.CLI_ARGS}}
+
+  # --- Contrôles ------------------------------------------------------------
+
+  doctor:
+    desc: État du squelette — outils, clés, chiffrement, hygiène. Ne déchiffre aucune valeur.
+    cmds:
+      - ./scripts/doctor.sh

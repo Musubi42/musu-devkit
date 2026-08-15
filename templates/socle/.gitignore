@@ -1,0 +1,36 @@
+# ⚠️ CE FICHIER EXISTE AVANT LE PREMIER `git add`, PAS APRÈS.
+#
+# Au moment où il a été écrit, il y avait ici un `.env` en clair contenant une
+# vraie RESEND_API_KEY. Un `git init && git add .` sans cette liste aurait mis
+# la clé dans l'historique — et un secret commité est brûlé, il se rotate, il ne
+# se réécrit pas (03 §8). C'est le mode de panne que ce dépôt est censé éprouver,
+# pas reproduire.
+
+# Secrets en clair — transitoires par construction (03 §4).
+# `.env.ref` est au contraire COMMITÉ : il ne contient que des noms.
+.env
+.env.*
+!.env.ref
+!.env.public
+!.env.example
+
+# Sorties de déchiffrement. `secrets/*.env` (chiffré sops) est commité ;
+# tout `.dec` est un artefact temporaire qui n'a rien à faire ici.
+secrets/*.dec
+*.dec
+
+*.key
+*.pem
+keys.txt
+
+node_modules/
+dist/
+.direnv/
+result
+result-*
+
+.DS_Store
+*.log
+
+# Instanciations de test du générateur — jetables
+.tmp-*/

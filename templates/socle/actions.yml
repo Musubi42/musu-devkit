@@ -1,0 +1,44 @@
+project: MON-PROJET
+ports: 7900-7999 # ⚠️ ALLOCATION NON ENREGISTRÉE — le registre fs/03-ops/ports.md
+                 # (musu-os) est la source de vérité et ce dépôt n'a pas le
+                 # droit de l'éditer. À valider par l'opérateur.
+
+# Banc d'essai de l'architecture de secrets décrite dans 03-dev-secrets-workflow.md.
+# Kanban jetable : aucune fonctionnalité qui n'existe pas pour éprouver un chemin
+# d'injection. Motif de référence : qr-shirt (injection par commande), pas Eurio.
+
+services:
+  - name: api
+    kind: native # node --watch — éprouve l'injection dans un process long
+    port: 7942
+    health: http://localhost:7942/healthz
+  - name: front
+    kind: native # Vite — éprouve la sémantique du préfixe VITE_
+    port: 7973
+  - name: postgres
+    kind: docker # éprouve l'héritage d'env vers un conteneur (03 §5.2)
+    port: 7932
+  - name: redis
+    kind: docker
+    port: 7979
+  - name: mailpit
+    kind: docker
+    port: 7925 # interface web ; SMTP sur 7926
+
+actions:
+  - name: doctor
+    description: État du squelette — outils, clés age, chiffrement, hygiène
+    run: task doctor
+    tier: auto
+  - name: secrets-verify
+    description: Sonde chaque secret contre son fournisseur (Resend)
+    run: task secrets:verify
+    tier: auto
+  - name: secrets-names
+    description: Noms des secrets présents, jamais les valeurs
+    run: task secrets:names
+    tier: auto
+  - name: status
+    description: État de la stack locale
+    run: docker compose -f deploy/compose.dev.yml ps
+    tier: auto

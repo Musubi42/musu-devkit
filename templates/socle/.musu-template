@@ -1,0 +1,25 @@
+# ⚠️ CE FICHIER EST LA PREUVE QUE LE SOCLE N'EST PAS ENCORE CONFIGURÉ.
+#
+# Tant qu'il existe, `task doctor` échoue. Le supprimer est le dernier geste
+# de la configuration — pas le premier.
+#
+# Pourquoi un marqueur plutôt qu'une liste de placeholders dans doctor.sh :
+# la première version cherchait les chaînes « MON-PROJET », « 7900-7999»…
+# écrites en dur dans doctor.sh. L'amorceur substituant TOUS les fichiers, il
+# réécrivait aussi ces chaînes-là — le contrôle se mettait donc à chercher le
+# nom du nouveau projet, qu'il trouvait partout, et signalait un socle
+# parfaitement configuré comme non configuré. Un contrôle qui se substitue
+# lui-même ne contrôle rien.
+#
+# `nix run …#musu-init` supprime ce fichier automatiquement.
+# Après un `nix flake init -t`, il reste à faire à la main :
+#
+#   [ ] nom du projet          MON-PROJET   → flake.nix, actions.yml, Taskfile.yml
+#   [ ] identifiants SQL       mon_projet   → .env.public
+#   [ ] tranche de ports       7900-7999    → actions.yml, .env.public,
+#                                             deploy/compose.dev.yml
+#       ⚠️ à réserver d'abord au registre musu-os fs/03-ops/ports.md
+#   [ ] recipient age          age1REMPLACER… → .sops.yaml
+#   [ ] sondes fournisseur                   → secrets.probes.sh
+#
+# Puis : rm .musu-template && task doctor
