@@ -68,11 +68,21 @@ sortie, ou en sortant ce dépôt de son dépôt d'origine :
 - un `aegis status` qui répondait « protégé » pour un dossier jamais enregistré,
   parce qu'il liste tous les projets et sort toujours en 0 ;
 - un garde-fou de bundle vérifié en rejouant la fuite avec une **vraie** clé ;
-- et le gauntlet lui-même : `sops` cherche `.sops.yaml` depuis le **répertoire
-  courant**, pas depuis `--filename-override`. Tant que le devkit vivait dans
-  `musuPlate/`, le scénario chiffrait avec les recipients de musuPlate — il
-  passait au vert en prouvant quelque chose sur le mauvais dépôt. L'extraction
-  a fait tomber la béquille et l'a rendu rouge.
+- et deux dans le harnais lui-même, tous deux dus à `pipefail` :
+  - `cmd | grep -q` donne au pipeline le statut de `cmd`, or presque tout ce
+    qu'on vérifie ici **sort en 1 exprès**. Le harnais échouait au moment précis
+    où la sortie contenait ce qu'il cherchait ;
+  - `grep -q` sort dès la **première** correspondance : `printf` en amont reçoit
+    un SIGPIPE et échoue, et `pipefail` transforme la trouvaille en échec. Une
+    course, qui ne frappait que l'assertion dont le motif apparaît en tête de
+    sortie — verte six fois, rouge la septième. **Un harnais instable est pire
+    qu'un harnais absent : il apprend à relancer jusqu'au vert.**
+
+Et un dernier, révélé par l'extraction elle-même : `sops` cherche `.sops.yaml`
+depuis le **répertoire courant**, pas depuis `--filename-override`. Tant que le
+devkit vivait dans `musuPlate/`, le scénario chiffrait avec les recipients de
+musuPlate — il passait au vert en prouvant quelque chose sur le mauvais dépôt.
+L'extraction a fait tomber la béquille.
 
 Le gauntlet n'installe aucun hook et n'écrit que dans un bac temporaire.
 

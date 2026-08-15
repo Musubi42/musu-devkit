@@ -55,10 +55,27 @@ assert_not() { local d="$1"; shift; if "$@" >/dev/null 2>&1; then ko "$d"; else 
 # On capture la sortie, puis on la lit. Le code de sortie se teste à part,
 # quand c'est lui qui est en cause.
 sortie() { ( cd "$1" && shift && "$@" 2>&1 ) || true; }
-dit()    { local d="$1" motif="$2"; shift 2
-           if printf '%s' "$(sortie "$@")" | grep -q "$motif"; then ok "$d"; else ko "$d"; fi; }
+
+# ⚠️ ET SURTOUT : PAS DE `| grep -q` ICI NON PLUS. DEUXIÈME PIÈGE, MÊME FAMILLE.
+#
+# `grep -q` sort dès la PREMIÈRE correspondance. L'écrivain en amont — ici
+# `printf` — reçoit alors un SIGPIPE et échoue ; avec `pipefail`, le statut du
+# pipeline devient non nul alors même que grep a trouvé. C'est une COURSE : elle
+# ne se déclenche que si le motif apparaît assez tôt pour que grep parte avant
+# la fin de l'écriture.
+#
+# Symptôme observé : une seule assertion instable sur 31 — précisément celle
+# dont le motif est en tête de la sortie de `doctor`. Verte six fois, rouge la
+# septième, sans qu'aucun fichier n'ait bougé. Un harnais instable est pire
+# qu'un harnais absent : il apprend à relancer jusqu'au vert.
+#
+# La comparaison de motif de bash ne fait intervenir aucun processus, donc
+# aucune course.
+contient_motif() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
+dit()     { local d="$1" motif="$2"; shift 2
+            if contient_motif "$(sortie "$@")" "$motif"; then ok "$d"; else ko "$d"; fi; }
 dit_pas() { local d="$1" motif="$2"; shift 2
-           if printf '%s' "$(sortie "$@")" | grep -q "$motif"; then ko "$d"; else ok "$d"; fi; }
+            if contient_motif "$(sortie "$@")" "$motif"; then ko "$d"; else ok "$d"; fi; }
 
 rm -rf "$BAC"; mkdir -p "$BAC"
 trap 'rm -rf "$BAC"' EXIT
