@@ -23,10 +23,12 @@
 # réglages de Claude Code, ce qu'un test n'a pas à faire.
 set -uo pipefail
 
-cd "$(dirname "$0")/../.."          # racine du dépôt
-RACINE="$PWD"
-BAC="$RACINE/.tmp-gauntlet"
-DEVKIT="$RACINE/devkit"
+# Le gauntlet a d'abord vécu dans musuPlate/devkit/ ; il remontait donc de deux
+# niveaux et cherchait un sous-dossier `devkit`. Le devkit ayant son dépôt, la
+# racine du dépôt EST le devkit — un niveau de moins, et plus de sous-dossier.
+cd "$(dirname "$0")/.."             # racine du dépôt = le devkit
+DEVKIT="$PWD"
+BAC="$DEVKIT/.tmp-gauntlet"
 
 if [ -t 1 ]; then
   R=$'\033[31m'; G=$'\033[32m'; B=$'\033[34m'; D=$'\033[2m'; Z=$'\033[0m'
@@ -120,10 +122,19 @@ dit "verify-secrets refuse de conclure sans fichier de secrets" 'introuvable' "$
 
 # Avec des secrets mais sans sonde, il ne doit PAS rendre un verdict vert :
 # sinon il dirait « tout est bon » sur un jeu de clés entièrement mortes.
+# ⚠️ `sops` CHERCHE `.sops.yaml` DEPUIS LE RÉPERTOIRE COURANT, PAS DEPUIS
+# `--filename-override`. Vérifié — et c'est un piège pour tout script qui
+# chiffre pour le compte d'un autre dossier.
+#
+# Ce gauntlet chiffrait donc, tant qu'il vivait dans musuPlate/devkit/, avec
+# les recipients de MUSUPLATE : il passait au vert en prouvant quelque chose
+# sur le mauvais dépôt. La sortie du devkit vers son propre dépôt — qui n'a
+# pas de `.sops.yaml` — a fait tomber la béquille et rendu le gauntlet rouge.
+# C'est exactement ce qu'un gauntlet doit faire.
 mkdir -p "$P/secrets"
-if printf 'MA_CLE=valeur-jetable-de-gauntlet-0000\n' \
-   | sops --encrypt --input-type dotenv --output-type dotenv \
-          --filename-override "$P/secrets/dev.env" /dev/stdin > "$P/secrets/dev.env" 2>/dev/null; then
+if ( cd "$P" && printf 'MA_CLE=valeur-jetable-de-gauntlet-0000\n' \
+     | sops --encrypt --input-type dotenv --output-type dotenv \
+            --filename-override secrets/dev.env /dev/stdin > secrets/dev.env ) 2>/dev/null; then
   dit "verify-secrets échoue tant qu'aucune sonde n'est écrite" 'aucune sonde écrite' "$P" ./scripts/verify-secrets.sh
 else
   note "chiffrement impossible (clé age absente de .sops.yaml) — scénario ignoré"

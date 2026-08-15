@@ -59,15 +59,20 @@ possède plutôt que des motifs de clés. Détail dans
 ```
 
 Sept scénarios, 31 assertions. **Chacun est un défaut qui a existé**, pas une
-hypothèse — trois d'entre eux sont des faux verts écrits de bonne foi et
-trouvés seulement en instanciant un deuxième projet ou en lisant un code de
-sortie :
+hypothèse — quatre d'entre eux sont des faux verts écrits de bonne foi et
+trouvés seulement en instanciant un deuxième projet, en lisant un code de
+sortie, ou en sortant ce dépôt de son dépôt d'origine :
 
 - un `doctor` qui cherchait des placeholders écrits en dur… que l'amorceur
   substituait aussi, corrompant le contrôle ;
 - un `aegis status` qui répondait « protégé » pour un dossier jamais enregistré,
   parce qu'il liste tous les projets et sort toujours en 0 ;
-- un garde-fou de bundle vérifié en rejouant la fuite avec une **vraie** clé.
+- un garde-fou de bundle vérifié en rejouant la fuite avec une **vraie** clé ;
+- et le gauntlet lui-même : `sops` cherche `.sops.yaml` depuis le **répertoire
+  courant**, pas depuis `--filename-override`. Tant que le devkit vivait dans
+  `musuPlate/`, le scénario chiffrait avec les recipients de musuPlate — il
+  passait au vert en prouvant quelque chose sur le mauvais dépôt. L'extraction
+  a fait tomber la béquille et l'a rendu rouge.
 
 Le gauntlet n'installe aucun hook et n'écrit que dans un bac temporaire.
 
@@ -87,6 +92,17 @@ de tag, et le travail récent (ADR 0012, l'UI) n'y est pas poussé. On épingle
 `refonte/engine-v1` plutôt que `main` parce que c'est la branche où la refonte
 engine v1 est livrée et le gauntlet S1 vert. Avancer cette révision est une
 décision à prendre dans le dépôt aegis, pas ici.
+
+## Où vit ce dépôt
+
+Extrait de `musuPlate/devkit/` le 2026-08-16, avec son historique
+(`git subtree split`). musuPlate reste son **gauntlet** : il le consomme comme
+`input` de flake et prouve, en tournant, que l'amorce produit un projet qui
+marche.
+
+Aucun remote n'est configuré. La ligne `musu-devkit.url` du template pointe sur
+`github:Musubi42/musu-devkit`, qui **n'existe pas encore** — c'est la seule
+chose qui manque pour qu'un `nix run` fonctionne depuis une autre machine.
 
 ## Limites
 
