@@ -85,8 +85,34 @@ if [ -f .env ]; then
 else
   ok "pas de .env en clair"
 fi
-grep -qE '^\.env$' .gitignore 2>/dev/null && ok ".env gitignoré" || bad ".env non gitignoré"
-[ -d .git ] && ok "dépôt git initialisé" || warn "pas encore un dépôt git"
+# ⚠️ NE PAS SUPPOSER QUE LE PROJET EST LA RACINE GIT.
+#
+# Ce contrôle faisait `grep '^\.env$' .gitignore` et `[ -d .git ]`. Les deux
+# tiennent tant que le projet est à la racine du dépôt — et tombent dès qu'il
+# vit dans un sous-dossier, où ils annoncent « .env non gitignoré » sur un
+# fichier parfaitement couvert par le .gitignore du dessus.
+#
+# Pire : le grep ne voyait pas non plus le gitignore GLOBAL
+# (~/.config/git/ignore), que doc 03 §8 recommande précisément d'utiliser
+# parce qu'un .gitignore par dépôt manque toujours à celui créé dans
+# l'urgence. Le contrôle pouvait donc crier au loup sur une machine
+# correctement configurée.
+#
+# `git check-ignore` répond à la vraie question — « ce chemin serait-il
+# ignoré, ici, maintenant » — en tenant compte de toute la cascade.
+RACINE_GIT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$RACINE_GIT" ]; then
+  ok "dépôt git${D} — racine : $RACINE_GIT${Z}"
+  if git check-ignore -q .env 2>/dev/null; then
+    ok ".env couvert par gitignore (cascade complète)"
+  else
+    bad ".env NON couvert par gitignore"
+  fi
+else
+  warn "pas encore un dépôt git — rien ne protège d'un futur premier commit"
+  grep -qE '^\.env$' .gitignore 2>/dev/null && ok ".gitignore local couvre .env" \
+    || bad "aucun .gitignore ne couvre .env"
+fi
 
 # ⚠️ Le grief central contre le chargement des secrets par le shell : direnv
 # recopie tout ce qu'il pose dans DIRENV_DIFF, variable héritée par tous les

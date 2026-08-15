@@ -123,10 +123,20 @@ else
   ok "pas de .env en clair"
 fi
 
-if grep -qE '^\.env$' .gitignore 2>/dev/null; then
-  ok ".env couvert par .gitignore"
+# ⚠️ `git check-ignore` et non un grep dans .gitignore : le projet n'est pas
+# forcément la racine du dépôt, et le gitignore GLOBAL (~/.config/git/ignore,
+# recommandé par doc 03 §8) est invisible à un grep local. La question posée
+# est « ce chemin serait-il ignoré, ici, maintenant » — toute la cascade.
+if git rev-parse --show-toplevel >/dev/null 2>&1; then
+  if git check-ignore -q .env 2>/dev/null; then
+    ok ".env couvert par gitignore (cascade complète)"
+  else
+    bad ".env NON couvert par gitignore"
+  fi
+elif grep -qE '^\.env$' .gitignore 2>/dev/null; then
+  ok ".gitignore local couvre .env (pas encore un dépôt git)"
 else
-  bad ".env NON couvert par .gitignore"
+  bad "aucun gitignore ne couvre .env"
 fi
 
 for f in secrets/*.env; do
