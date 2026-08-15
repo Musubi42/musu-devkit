@@ -26,9 +26,10 @@
 #
 # ⚠️ OÙ ÉCRIT `install`, EXACTEMENT
 # `shhh install --scope project` écrit dans ./.claude/settings.json, DANS le
-# projet. `aegis init` crée un store sous ~/.config/aegis, HORS du projet — un
-# filet rangé dans l'arbre qu'il protège disparaît avec lui. C'est la seule
-# écriture hors projet, elle est annoncée et confirmée avant d'être faite.
+# projet. `aegis init` écrit HORS du projet, à deux endroits : le shadow sous
+# ~/.config/aegis, et un hook PreToolUse GLOBAL dans ~/.claude/settings.json.
+# Tout est annoncé et confirmé avant d'être fait — le détail dans le texte de
+# `install`, qui est ce que l'opérateur lit au moment de répondre.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -121,10 +122,18 @@ case "$CMD" in
           protection sans dépendre de ce que son propriétaire a configuré
           chez lui. Retrait : shhh uninstall claude-code --scope project
 
-  aegis → crée un store sous ~/.config/aegis/ — HORS du projet, et c'est
-          voulu : un filet rangé dans l'arbre qu'il protège disparaît avec
-          lui. Empreinte nulle dans le working tree.
-          C'est la seule écriture hors projet de ce script.
+  aegis → écrit à DEUX endroits, tous deux hors du projet :
+            · ~/.config/aegis/shadow/<projet>  — le filet lui-même. Hors de
+              l'arbre à dessein : un filet rangé dans ce qu'il protège
+              disparaît avec lui. Empreinte nulle dans le working tree.
+            · ~/.claude/settings.json          — un hook PreToolUse GLOBAL,
+              qui s'applique donc à tous vos projets, pas seulement celui-ci.
+          Ce second point ne figurait pas ici jusqu'au 2026-08-16 : le script
+          annonçait moins qu'il ne faisait. Un avertissement incomplet vaut
+          à peine mieux que pas d'avertissement — c'est sur sa foi qu'on
+          répond « oui ».
+          Sans le hook global : aegis init --no-hook (le shadow reste, la
+          capture avant chaque action d'agent, non).
 
 AVERT
     if [ "${1:-}" != "--yes" ]; then
