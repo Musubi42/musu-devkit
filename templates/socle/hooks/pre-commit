@@ -41,7 +41,13 @@ if gitleaks git --staged --redact --no-banner --exit-code 1 >/dev/null 2>&1; the
 fi
 
 printf '\n\033[31m✗ commit refusé — un secret figure dans ce que tu ajoutes.\033[0m\n\n' >&2
-gitleaks git --staged --redact --no-banner 2>&1 | grep -vE '^\s*$' | tail -30 >&2
+# `-v` : sans lui, gitleaks n'annonce que « leaks found: 1 ». Un hook qui
+# bloque sans dire OÙ est un hook qu'on désactive au deuxième blocage.
+# Avec `-v` et `--redact`, on obtient fichier, ligne, règle et empreinte —
+# l'empreinte étant précisément ce qu'on colle dans .gitleaksignore si c'est
+# un faux positif. La valeur, elle, reste REDACTED.
+gitleaks git --staged --redact --no-banner -v 2>&1 \
+  | grep -vE 'INF|scanned|^\s*$' | head -40 >&2
 
 cat >&2 <<'FIN'
 

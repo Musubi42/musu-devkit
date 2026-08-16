@@ -39,7 +39,8 @@ après un `nix flake init -t`, il reste, et il liste ce qu'il faut remplacer.
 | `scripts/with-secrets.sh` | déchiffre en mémoire, `exec` la commande — jamais un shell entier |
 | `scripts/verify-secrets.sh` | couverture, hygiène, et **vivacité** via les sondes |
 | `secrets.probes.sh` | le **seul** fichier propre au projet ; échoue tant qu'il est vide |
-| `scripts/guards.sh` | câble et interroge `shhh` et `aegis` |
+| `scripts/guards.sh` | câble et interroge `shhh`, `aegis` et le hook git |
+| `hooks/pre-commit` | **refuse un commit qui AJOUTE un secret** — `gitleaks` sur le diff indexé |
 | `scripts/front-guard.sh` | valeurs exactes **+** `shhh scan` sur le bundle produit |
 | `scripts/doctor.sh` | l'état complet, sans jamais déchiffrer une valeur |
 | `GARDE-FOUS.md` | la doctrine, parce que les commandes s'oublient |
@@ -95,6 +96,7 @@ pas la couverture.
 | | version | source |
 |---|---|---|
 | shhh | v0.3.0 | github.com/Musubi42/shhh |
+| gitleaks | 8.30.1 (nixpkgs) | la version que shhh embarque — mêmes règles |
 | aegis | `refonte/engine-v1` @ `9f3d379` (2026-07-03) | codeberg.org/Musubi42/Aegis |
 
 ⚠️ **aegis est épinglé en retard sur la copie locale.** Le dépôt public n'a pas
