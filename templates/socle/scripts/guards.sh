@@ -114,6 +114,27 @@ case "$CMD" in
       manquants=$((manquants + 1))
     fi
 
+    # ⚠️ LE FICHIER DE HOOK NE SUFFIT PAS — IL FAUT QUE GIT LE REGARDE.
+    #
+    # `hooks/pre-commit` est versionné, donc un clone l'a. Mais git ne lit ce
+    # dossier que si `core.hooksPath` le désigne, et `core.hooksPath` est une
+    # CONFIG LOCALE : elle ne se clone pas. Un dépôt fraîchement cloné a donc
+    # le fichier sans avoir la protection — exactement le genre d'écart qui
+    # passe pour vert. On vérifie la config, pas la présence du fichier.
+    if command -v gitleaks >/dev/null; then
+      hp="$(git config --get core.hooksPath 2>/dev/null || true)"
+      if [ -n "$hp" ] && [ -x "$hp/pre-commit" ]; then
+        [ "$QUIET" -eq 1 ] || ok "gitleaks $(gitleaks version 2>/dev/null) — hook pre-commit armé ($hp)"
+      else
+        [ "$QUIET" -eq 1 ] || warn "gitleaks présent mais core.hooksPath non posé — rien ne bloque un commit"
+        note "task guards:install"
+        manquants=$((manquants + 1))
+      fi
+    else
+      [ "$QUIET" -eq 1 ] || bad "gitleaks absent — entrer dans le devShell (direnv allow)"
+      manquants=$((manquants + 1))
+    fi
+
     if [ "$QUIET" -eq 1 ]; then
       [ "$manquants" -gt 0 ] && printf '%s! %d garde-fou(s) non câblé(s) — task guards:install%s\n' "$Y" "$manquants" "$Z"
       exit 0
@@ -130,6 +151,13 @@ case "$CMD" in
           exige, et un clone sur une autre machine doit hériter de la même
           protection sans dépendre de ce que son propriétaire a configuré
           chez lui. Retrait : shhh uninstall claude-code --scope project
+
+  gitleaks → hooks/pre-commit est déjà dans le dépôt ; il reste à dire à git
+          de le regarder, ce qui est une config LOCALE et ne se clone pas :
+            · git config core.hooksPath hooks   — DANS ce dépôt seulement
+            · ou ~/.config/git/hooks + core.hooksPath global — TOUS vos
+              dépôts, y compris ceux qui n'ont pas ce socle (doc 03 §8).
+          Par défaut : ce dépôt. Le global se demande à part.
 
   aegis → écrit à DEUX endroits, tous deux hors du projet :
             · ~/.config/aegis/shadow/<projet>  — le filet lui-même. Hors de
@@ -150,6 +178,18 @@ AVERT
       printf 'Continuer ? [o/N] '
       read -r rep
       case "$rep" in o|O|oui|y|Y) ;; *) echo "abandon."; exit 1 ;; esac
+    fi
+
+    # --- hook git ---------------------------------------------------------
+    if command -v gitleaks >/dev/null; then
+      if [ -x hooks/pre-commit ]; then
+        git config core.hooksPath hooks && ok "gitleaks — hook pre-commit armé sur ce dépôt"
+        note "core.hooksPath est local : à refaire après chaque clone (task doctor le dira)"
+      else
+        bad "hooks/pre-commit manquant ou non exécutable"
+      fi
+    else
+      bad "gitleaks introuvable — direnv allow"
     fi
 
     if command -v shhh >/dev/null; then

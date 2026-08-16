@@ -68,7 +68,7 @@
           packages = [
             self.packages.${pkgs.system}.shhh
             self.packages.${pkgs.system}.aegis
-          ] ++ (with pkgs; [ go-task sops age jq shellcheck ]);
+          ] ++ (with pkgs; [ go-task sops age jq shellcheck gitleaks ]);
         };
       });
     };

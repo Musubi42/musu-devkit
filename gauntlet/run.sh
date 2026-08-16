@@ -84,8 +84,10 @@ trap 'rm -rf "$BAC"' EXIT
 # épinglée qu'on veut exercer.
 S="$(cd "$DEVKIT" && nix build .#shhh  --print-out-paths --no-link 2>/dev/null)"
 A="$(cd "$DEVKIT" && nix build .#aegis --print-out-paths --no-link 2>/dev/null)"
-[ -n "$S" ] && [ -n "$A" ] || { echo "✗ shhh/aegis non constructibles — gauntlet impossible" >&2; exit 1; }
-export PATH="$S/bin:$A/bin:$PATH"
+G_="$(nix build nixpkgs#gitleaks --print-out-paths --no-link 2>/dev/null)"
+[ -n "$S" ] && [ -n "$A" ] && [ -n "$G_" ] \
+  || { echo "✗ shhh/aegis/gitleaks non constructibles — gauntlet impossible" >&2; exit 1; }
+export PATH="$S/bin:$A/bin:$G_/bin:$PATH"
 
 # ─────────────────────────────────────────────────────────────────────────────
 scenario "G1 — l'amorce non interactive pose un socle complet"
@@ -183,6 +185,45 @@ note "premier contrôle validait donc un dossier jamais enregistré."
 
 dit "guards status distingue ce projet des autres projets aegis" "CE projet n'est pas enregistré" "$P" ./scripts/guards.sh status
 dit "doctor refuse le verdict vert tant que les garde-fous ne sont pas câblés" 'GARDE-FOUS NON CÂBLÉS' "$P" ./scripts/doctor.sh
+
+# ─────────────────────────────────────────────────────────────────────────────
+scenario "G8 — le hook pre-commit bloque ce qu'on AJOUTE, pas ce qui traîne"
+note "le second cas décide de tout : un hook qui bloque sur un secret déjà"
+note "présent bloque TOUS les commits, et se désinstalle dans la journée."
+
+H="$BAC/g8"
+mkdir -p "$H"
+cp -R "$DEVKIT/templates/socle/hooks" "$H/hooks"
+chmod +x "$H"/hooks/*
+( cd "$H" && git init -q -b main \
+  && git config user.email g@g && git config user.name g \
+  && git config core.hooksPath hooks ) 2>/dev/null
+
+# Cas 1 — un secret déjà commité, puis un commit qui ne le touche pas.
+printf 'k = "ghp_16C7e42F292c6912E7710c838347Ae178B4a"\n' > "$H/a.py"
+( cd "$H" && git add -A && git commit -q --no-verify -m base ) 2>/dev/null
+printf 'k = "ghp_16C7e42F292c6912E7710c838347Ae178B4a"\nautre = 1\n' > "$H/a.py"
+if ( cd "$H" && git add a.py && git commit -q -m "sans rapport" ) >/dev/null 2>&1; then
+  ok "un secret PRÉEXISTANT ne bloque pas un commit sans rapport"
+else
+  ko "le hook bloque un commit qui n'ajoute aucun secret — inutilisable au quotidien"
+fi
+
+# Cas 2 — on ajoute vraiment un secret.
+printf 'nouveau = "ghp_ABCDe42F292c6912E7710c838347Ae178B4a"\n' >> "$H/a.py"
+if ( cd "$H" && git add a.py && git commit -q -m "ajout" ) >/dev/null 2>&1; then
+  ko "le hook laisse passer un secret AJOUTÉ"
+else
+  ok "un secret ajouté est refusé"
+fi
+
+# Cas 3 — la sortie ne doit jamais contenir la valeur trouvée.
+rapport="$( cd "$H" && git commit -m x 2>&1 || true )"
+if contient_motif "$rapport" 'ghp_ABCDe42F292c6912E7710c838347Ae178B4a'; then
+  ko "le hook recopie le secret dans sa sortie — il élargit la fuite qu'il signale"
+else
+  ok "la sortie du hook ne contient pas la valeur (--redact)"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 scenario "G7 — l'amorce refuse d'écrire par-dessus du travail existant"

@@ -32,6 +32,12 @@
             age
             jq
             curl
+            # ⚠️ Version épinglée par nixpkgs — et c'est exactement celle que
+            # shhh embarque comme moteur (8.30.1 au 2026-08-16). Le hook
+            # pre-commit et la rédaction vers le modèle appliquent donc les
+            # mêmes règles, ce qui évite d'avoir deux idées de ce qu'est un
+            # secret sur la même machine.
+            gitleaks
             # Décommenter selon les briques du projet :
             # nodejs_24 pnpm_10 postgresql_16 python3 go
           ] ++ [

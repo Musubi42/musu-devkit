@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Refuse un commit qui AJOUTE un secret.
+#
+# Armé par `task guards:install`, qui pose `core.hooksPath` sur ce dossier.
+# Contourner ponctuellement : `git commit --no-verify` — et si tu le fais,
+# c'est que tu sais ce que tu commites.
+#
+# ⚠️ IL SCANNE LE DIFF INDEXÉ, PAS L'ARBRE. C'EST TOUTE LA DIFFÉRENCE.
+#
+# Mesuré avant d'écrire ce fichier, sur un dépôt jetable : un secret déjà
+# présent dans l'historique, et un commit qui ne le touche pas.
+#
+#   scan de l'ARBRE indexé  → secret trouvé → TOUS les commits bloqués, pour
+#                             toujours, jusqu'à rotation. Le hook se désinstalle
+#                             dans la journée.
+#   scan du DIFF indexé     → rien. Seul ce qu'on ajoute compte.
+#
+# `gitleaks git --staged` fait le second nativement. C'est la raison pour
+# laquelle ce hook ne se contente pas d'un `shhh scan .` — shhh inspecte des
+# fichiers sur le disque, ce qui est la sémantique « arbre ».
+#
+# ⚠️ `--redact` N'EST PAS FACULTATIF.
+#
+# Sans lui, gitleaks imprime la valeur trouvée. Un hook qui, pour t'annoncer
+# une fuite, recopie le secret dans ton terminal — donc dans le scrollback,
+# dans un journal de CI, dans la transcription d'un agent — vient d'élargir la
+# fuite qu'il prétend arrêter.
+set -uo pipefail
+
+command -v gitleaks >/dev/null || {
+  # ⚠️ Absent ≠ rien à signaler. Un hook silencieusement inopérant est pire
+  # que pas de hook : on croit être couvert. On le dit, et on laisse passer —
+  # bloquer tous les commits parce qu'un outil manque serait pire encore.
+  printf '\033[33m!\033[0m pre-commit : gitleaks introuvable — AUCUNE vérification faite.\n' >&2
+  printf '  entrer dans le devShell (direnv allow), ou : git commit --no-verify\n' >&2
+  exit 0
+}
+
+if gitleaks git --staged --redact --no-banner --exit-code 1 >/dev/null 2>&1; then
+  exit 0
+fi
+
+printf '\n\033[31m✗ commit refusé — un secret figure dans ce que tu ajoutes.\033[0m\n\n' >&2
+gitleaks git --staged --redact --no-banner 2>&1 | grep -vE '^\s*$' | tail -30 >&2
+
+cat >&2 <<'FIN'
+
+  Les valeurs ci-dessus sont tronquées : gitleaks tourne avec --redact.
+
+  Ensuite :
+    · le secret n'a rien à faire là  → le retirer, puis `task secrets:edit`
+      pour le mettre dans secrets/dev.env chiffré
+    · faux positif                   → l'inscrire dans .gitleaksignore avec
+      son empreinte, une fois, en connaissance de cause
+    · tu sais ce que tu fais         → git commit --no-verify
+
+  ⚠️ Un secret déjà poussé est brûlé : il se rotate, on ne réécrit pas un
+     historique partagé (doc 03 §8).
+
+FIN
+exit 1
