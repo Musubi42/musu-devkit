@@ -34,6 +34,24 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# ⚠️ L'UNITÉ GARDÉE EST LE DÉPÔT, PAS LE SOUS-DOSSIER.
+#
+# Les trois filets s'appliquent à un dépôt git : aegis enregistre un projet,
+# `core.hooksPath` est une config de dépôt, et le hook shhh vaut pour tout ce
+# qu'un agent lit sous cette racine.
+#
+# Lancé depuis un sous-dossier, `aegis init` prendrait le nom du sous-dossier
+# et créerait un SECOND projet à côté du vrai — deux shadows, deux registres,
+# et un `guards status` qui répond juste à la mauvaise question. C'est arrivé
+# le 2026-08-16, en câblant les garde-fous depuis un banc d'essai rangé dans
+# `banc/`.
+#
+# On se place donc à la racine git dès le départ. Hors dépôt git, le dossier
+# courant fait office de racine — un projet pas encore versionné doit pouvoir
+# être diagnostiqué.
+RACINE="$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)"
+cd "$RACINE"
+
 if [ -t 1 ]; then
   R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'; D=$'\033[2m'; Z=$'\033[0m'
 else
@@ -100,7 +118,7 @@ case "$CMD" in
       # ~/.config/aegis/projects/<nom>.json avec le chemin du projet. Coût
       # nul, et la question posée reste la bonne — « CE dossier-ci, pas un
       # autre ».
-      ici="$(pwd -P)"
+      ici="$RACINE"
       reg="${XDG_CONFIG_HOME:-$HOME/.config}/aegis/projects/$(basename "$ici").json"
       if [ -f "$reg" ] && grep -qF "\"$ici\"" "$reg"; then
         [ "$QUIET" -eq 1 ] || ok "aegis — ce projet est enregistré, shadow actif"
@@ -193,7 +211,7 @@ AVERT
     fi
 
     if command -v shhh >/dev/null; then
-      shhh install claude-code --scope project --cwd "$PWD" && ok "shhh câblé (projet)"
+      shhh install claude-code --scope project --cwd "$RACINE" && ok "shhh câblé (projet)"
     else bad "shhh introuvable — direnv allow"; fi
 
     if command -v aegis >/dev/null; then
